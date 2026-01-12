@@ -1,15 +1,23 @@
 
 import React, { useState, useEffect } from 'react';
 import { SolvingStep, StepType } from '../types';
+import { getSimplerExplanation } from '../services/geminiService';
+// @ts-ignore
+import confetti from 'canvas-confetti';
 
 interface StepSolverProps {
   steps: SolvingStep[];
+  problemText: string;
 }
 
-const StepSolver: React.FC<StepSolverProps> = ({ steps }) => {
+const StepSolver: React.FC<StepSolverProps> = ({ steps, problemText }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [isWrong, setIsWrong] = useState(false);
+  
+  // State for simple explanations
+  const [simpleExplanations, setSimpleExplanations] = useState<Record<number, string>>({});
+  const [isExplaining, setIsExplaining] = useState(false);
 
   const currentStep = steps[currentStepIndex];
   const correctIdx = typeof currentStep.correctOptionIndex === 'number' ? currentStep.correctOptionIndex : -1;
@@ -23,6 +31,13 @@ const StepSolver: React.FC<StepSolverProps> = ({ steps }) => {
     setSelectedOption(index);
     if (index === correctIdx) {
       setIsWrong(false);
+      // Fire fireworks!
+      confetti({
+        particleCount: 150,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors: ['#6366f1', '#10b981', '#f59e0b', '#ef4444']
+      });
     } else {
       setIsWrong(true);
       setTimeout(() => setIsWrong(false), 500);
@@ -33,54 +48,114 @@ const StepSolver: React.FC<StepSolverProps> = ({ steps }) => {
     setCurrentStepIndex(prev => Math.min(prev + 1, steps.length - 1));
   };
 
+  const handleExplainSimply = async () => {
+    if (isExplaining) return;
+    setIsExplaining(true);
+    try {
+      const text = await getSimplerExplanation(problemText, currentStep.instruction);
+      setSimpleExplanations(prev => ({
+        ...prev,
+        [currentStep.id]: text
+      }));
+    } catch (e) {
+      console.error(e);
+      alert("请检查网络连接");
+    } finally {
+      setIsExplaining(false);
+    }
+  };
+
   const isLastStep = currentStepIndex === steps.length - 1;
   const isCorrect = selectedOption !== null && selectedOption === correctIdx;
   const canProceed = currentStep.type === StepType.INFERENCE || isCorrect;
 
   return (
-    <div className="bg-white rough-box shadow-[10px_10px_0px_#e2e8f0] overflow-hidden mb-12 transform -rotate-1">
-      <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center text-white border-b-4 border-slate-900">
-        <h3 className="handwritten text-2xl tracking-wide">✏️ 数学笔记 - 思路梳理</h3>
-        <span className="handwritten text-lg font-bold">
-          第 {currentStepIndex + 1} 步 / 共 {steps.length} 步
+    <div className="bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden mb-12">
+      {/* Header */}
+      <div className="bg-slate-800 text-white px-8 py-5 flex justify-between items-center">
+        <h3 className="text-xl font-bold flex items-center gap-2">
+          <span className="bg-indigo-500 p-1.5 rounded text-sm">Step {currentStepIndex + 1}</span>
+          跟阿奇学数学
+        </h3>
+        <span className="text-slate-300 font-medium">
+           {currentStepIndex + 1} / {steps.length}
         </span>
       </div>
 
-      <div className="p-8 paper-bg">
-        {/* 手绘感进度条 */}
-        <div className="flex gap-4 mb-10">
-          {steps.map((_, idx) => (
-            <div 
-              key={idx}
-              className={`h-4 flex-1 transition-all duration-500 rough-box ${
-                idx < currentStepIndex ? 'bg-emerald-400' : 
-                idx === currentStepIndex ? 'bg-indigo-500 shadow-[0_5px_15px_rgba(99,102,241,0.4)]' : 'bg-white'
-              }`}
-            />
-          ))}
-        </div>
+      {/* Progress Bar */}
+      <div className="w-full bg-slate-100 h-2">
+        <div 
+          className="bg-indigo-500 h-2 transition-all duration-500 ease-out"
+          style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
+        ></div>
+      </div>
 
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {/* 指导语 */}
-          <div className="bg-yellow-50 rough-box p-6 shadow-sm transform rotate-1">
-            <h4 className="handwritten text-indigo-600 text-xl mb-2">哥哥引导：</h4>
-            <p className="handwritten text-2xl text-slate-800 leading-relaxed">
-              {currentStep.instruction}
-            </p>
+      <div className="p-8 md:p-10">
+        <div className="max-w-4xl mx-auto space-y-8">
+          
+          {/* Instruction Card */}
+          <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-6 relative">
+            <div className="flex justify-between items-start gap-6">
+              <div>
+                <h4 className="text-indigo-800 font-bold mb-2 uppercase text-xs tracking-wider">阿奇的引导</h4>
+                <p className="text-xl text-slate-800 font-medium leading-relaxed">
+                  {currentStep.instruction}
+                </p>
+              </div>
+              
+              {!simpleExplanations[currentStep.id] && (
+                <button 
+                  onClick={handleExplainSimply}
+                  disabled={isExplaining}
+                  className="shrink-0 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-bold py-2 px-4 rounded-lg transition-all shadow-sm flex items-center gap-2"
+                >
+                  {isExplaining ? (
+                    <span className="animate-pulse">思考中...</span>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      看不懂？换个讲法
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {/* Simple Explanation Expandable */}
+            {simpleExplanations[currentStep.id] && (
+              <div className="mt-4 pt-4 border-t border-indigo-200/50 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-start gap-3">
+                  <div className="bg-yellow-100 p-1.5 rounded text-yellow-700 mt-1">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span className="block text-yellow-800 font-bold text-sm mb-1">通俗解释</span>
+                    <p className="text-slate-700 text-lg leading-relaxed">
+                      {simpleExplanations[currentStep.id]}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* Options Area */}
           {currentStep.type === StepType.QUESTION && currentStep.options && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {currentStep.options.map((option, idx) => {
                   const isThisSelected = selectedOption === idx;
                   const isThisActuallyCorrect = idx === correctIdx;
                   
-                  let colorClass = 'bg-white border-slate-300';
+                  let colorClass = 'bg-white border-slate-200 hover:border-indigo-400 hover:shadow-md';
                   if (isThisSelected) {
                     colorClass = isThisActuallyCorrect 
-                      ? 'bg-emerald-100 border-emerald-500' 
-                      : 'bg-red-100 border-red-500';
+                      ? 'bg-emerald-50 border-emerald-500 shadow-md ring-1 ring-emerald-500' 
+                      : 'bg-red-50 border-red-500 shadow-md ring-1 ring-red-500';
                   }
 
                   return (
@@ -88,70 +163,82 @@ const StepSolver: React.FC<StepSolverProps> = ({ steps }) => {
                       key={idx}
                       onClick={() => handleOptionClick(idx)}
                       disabled={isCorrect && !isThisSelected}
-                      className={`group p-6 rough-box text-left transition-all duration-200 hover:scale-[1.02] active:scale-95 ${colorClass} ${isWrong && isThisSelected ? 'animate-shake' : ''}`}
+                      className={`group p-6 text-left border rounded-lg transition-all duration-200 ${colorClass} ${isWrong && isThisSelected ? 'animate-shake' : ''}`}
                     >
                       <div className="flex items-center gap-4">
-                        <span className={`handwritten w-12 h-12 rounded-full flex items-center justify-center text-2xl border-2 ${
+                        <span className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold border ${
                           isThisSelected 
-                            ? (isThisActuallyCorrect ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-red-500 text-white border-red-600')
-                            : 'bg-white border-slate-400 text-slate-500 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-700'
+                            ? (isThisActuallyCorrect ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-red-500 text-white border-red-500')
+                            : 'bg-slate-100 text-slate-500 border-slate-200 group-hover:bg-indigo-500 group-hover:text-white group-hover:border-indigo-500 transition-colors'
                         }`}>
                           {String.fromCharCode(65 + idx)}
                         </span>
-                        <span className="handwritten text-2xl text-slate-800">{option}</span>
+                        <span className="text-xl text-slate-800 font-medium">{option}</span>
                       </div>
                     </button>
                   );
                 })}
               </div>
 
-              {/* 反馈卡片 */}
+              {/* Feedback Message */}
               {selectedOption !== null && currentStep.optionExplanations && (
-                <div className={`p-6 rough-box transform -rotate-1 shadow-md animate-in zoom-in-95 duration-300 ${
-                  isCorrect ? 'bg-emerald-50 border-emerald-300' : 'bg-orange-50 border-orange-300'
+                <div className={`p-5 rounded-lg border flex gap-4 animate-in zoom-in-95 duration-200 ${
+                  isCorrect ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-orange-50 border-orange-200 text-orange-900'
                 }`}>
-                  <h5 className="handwritten text-2xl mb-2 flex items-center gap-2">
-                    {isCorrect ? '🌟 哇！思路完全正确！' : '🧩 哎呀，这里有个小陷阱：'}
-                  </h5>
-                  <p className="handwritten text-xl text-slate-700 leading-relaxed">
-                    {currentStep.optionExplanations[selectedOption]}
-                  </p>
+                  <div className={`text-2xl ${isCorrect ? 'text-emerald-500' : 'text-orange-500'}`}>
+                    {isCorrect ? '✓' : '!'}
+                  </div>
+                  <div>
+                    <h5 className="font-bold mb-1">
+                      {isCorrect ? '回答正确！' : '再思考一下'}
+                    </h5>
+                    <p className="text-lg leading-relaxed opacity-90">
+                      {currentStep.optionExplanations[selectedOption]}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
           )}
 
+          {/* Inference Step Display */}
           {currentStep.type === StepType.INFERENCE && (
-            <div className="rough-box p-8 bg-indigo-50 border-indigo-200 shadow-md transform -rotate-1">
-              <h4 className="handwritten text-indigo-900 text-2xl mb-3">🧐 哥哥的思考推导：</h4>
-              <p className="handwritten text-3xl text-indigo-700 italic font-bold">
+            <div className="bg-indigo-50 border-l-4 border-indigo-500 p-6 rounded-r-lg shadow-sm">
+              <h4 className="text-indigo-800 font-bold mb-2 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                逻辑推导
+              </h4>
+              <p className="text-xl text-indigo-900 font-bold">
                 {currentStep.aiConclusion}
               </p>
             </div>
           )}
 
+          {/* Proceed Section */}
           {canProceed && (
-            <div className="mt-12 pt-8 border-t-4 border-dashed border-slate-200 animate-in fade-in zoom-in-95 duration-700">
-              <div className="bg-slate-100 rough-box p-6 mb-8 transform rotate-1">
-                <span className="handwritten text-indigo-600 text-2xl block mb-2">💡 划重点：</span>
-                <p className="handwritten text-2xl text-slate-800">{currentStep.explanation}</p>
+            <div className="mt-8 pt-8 border-t border-slate-200 animate-in fade-in slide-in-from-bottom-2">
+              <div className="bg-slate-50 rounded-lg p-6 mb-8 border border-slate-200">
+                <span className="text-indigo-600 font-bold block mb-2 text-sm uppercase tracking-wider">本步总结</span>
+                <p className="text-xl text-slate-800 font-medium">{currentStep.explanation}</p>
               </div>
               
               {!isLastStep ? (
                 <button
                   onClick={nextStep}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white handwritten py-6 rounded-xl shadow-[6px_6px_0px_#1e1b4b] transition-all transform hover:-translate-y-1 active:translate-y-1 flex items-center justify-center gap-4 text-3xl"
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-3 text-xl"
                 >
-                  继续下一步思路
-                  <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  下一步
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M14 5l7 7-7 7M5 5l7 7-7 7" />
                   </svg>
                 </button>
               ) : (
-                <div className="bg-indigo-600 text-white p-10 rough-box text-center shadow-2xl animate-bounce-slow">
-                  <div className="text-6xl mb-6">🏆</div>
-                  <h4 className="handwritten text-4xl mb-4">挑战圆满成功！</h4>
-                  <p className="handwritten text-2xl opacity-90 font-bold">这一题你已经完全吃透啦，下次遇到同样的坑肯定能跳过去！</p>
+                <div className="bg-emerald-600 text-white p-8 rounded-lg text-center shadow-xl">
+                  <div className="text-5xl mb-4">🏆</div>
+                  <h4 className="text-3xl font-bold mb-2">挑战成功！</h4>
+                  <p className="text-xl opacity-90">这道题你已经完全掌握了！</p>
                 </div>
               )}
             </div>
@@ -162,18 +249,11 @@ const StepSolver: React.FC<StepSolverProps> = ({ steps }) => {
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-8px) rotate(-1deg); }
-          75% { transform: translateX(8px) rotate(1deg); }
+          25% { transform: translateX(-4px); }
+          75% { transform: translateX(4px); }
         }
         .animate-shake {
           animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both;
-        }
-        @keyframes bounce-slow {
-          0%, 100% { transform: translateY(0) rotate(-1deg); }
-          50% { transform: translateY(-10px) rotate(1deg); }
-        }
-        .animate-bounce-slow {
-          animation: bounce-slow 3s ease-in-out infinite;
         }
       `}</style>
     </div>

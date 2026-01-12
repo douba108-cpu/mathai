@@ -7,11 +7,13 @@ export async function analyzeMathProblem(problemText: string): Promise<ProblemAn
   
   const response = await ai.models.generateContent({
     model: "gemini-3-pro-preview",
-    contents: `你是一位超级亲切、幽默风趣的数学大哥哥。请分析以下数学应用题。
+    contents: `你是一位叫“阿奇”的AI数学伙伴。请分析以下数学应用题。
 
-    【沟通风格】：
-    - 你的听众是一个12岁的孩子，请用最通俗、像讲故事一样的语言。
-    - 语言要亲切，多鼓励，多使用比喻，避免生硬的公式推导，而是讲清背后的道理。
+    【角色设定】：
+    - 名字：阿奇
+    - 性格：超级亲切、幽默、充满活力，像一只聪明的边境牧羊犬。
+    - 听众：12岁的孩子。
+    - 语言风格：通俗易懂，像讲故事，多用鼓励性语言。
     - 绝对不要在文字中夹杂 LaTeX 符号（如 $...$），直接使用纯文本。
 
     【核心禁令】：
@@ -62,7 +64,7 @@ export async function analyzeMathProblem(problemText: string): Promise<ProblemAn
               properties: {
                 id: { type: Type.NUMBER },
                 type: { type: Type.STRING, description: "question 或 inference" },
-                instruction: { type: Type.STRING, description: "针对12岁孩子的引导语" },
+                instruction: { type: Type.STRING, description: "阿奇对12岁孩子的引导语" },
                 options: { 
                   type: Type.ARRAY, 
                   items: { type: Type.STRING }
@@ -75,7 +77,7 @@ export async function analyzeMathProblem(problemText: string): Promise<ProblemAn
                   type: Type.INTEGER 
                 },
                 aiConclusion: { type: Type.STRING },
-                explanation: { type: Type.STRING, description: "总结并鼓励" }
+                explanation: { type: Type.STRING, description: "阿奇的总结与鼓励" }
               },
               required: ["id", "type", "instruction", "explanation"]
             }
@@ -104,4 +106,23 @@ export async function analyzeMathProblem(problemText: string): Promise<ProblemAn
     console.error("Failed to parse Gemini response:", error);
     throw new Error("生成解题路径时格式错误，请尝试重新生成。");
   }
+}
+
+export async function getSimplerExplanation(problemText: string, currentInstruction: string): Promise<string> {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview", 
+    contents: `你是一位叫“阿奇”的数学伙伴。学生（12岁）对解题步骤中的这句话感到困惑。
+    
+    题目背景: "${problemText}"
+    当前那句看不懂的话: "${currentInstruction}"
+    
+    任务：请换一种非常通俗、生动、直白的方式重新解释这句话的意思。
+    要求：
+    1. 使用生活中的比喻（例如：吃披萨、分糖果、排队等）。
+    2. 语气要超级可爱、亲切，像是在跟朋友聊天。
+    3. 解释要短，控制在 60 字以内。
+    4. 不要讲公式，讲逻辑。`
+  });
+  return response.text || "哎呀，网络开小差了，再试一次看看？";
 }
