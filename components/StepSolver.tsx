@@ -15,6 +15,9 @@ const StepSolver: React.FC<StepSolverProps> = ({ steps, problemText }) => {
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [isWrong, setIsWrong] = useState(false);
   
+  // Store user progress to remember choices when going back and forth
+  const [userChoices, setUserChoices] = useState<Record<number, number | null>>({});
+  
   // State for simple explanations
   const [simpleExplanations, setSimpleExplanations] = useState<Record<number, string>>({});
   const [isExplaining, setIsExplaining] = useState(false);
@@ -22,13 +25,16 @@ const StepSolver: React.FC<StepSolverProps> = ({ steps, problemText }) => {
   const currentStep = steps[currentStepIndex];
   const correctIdx = typeof currentStep.correctOptionIndex === 'number' ? currentStep.correctOptionIndex : -1;
 
+  // Sync selectedOption with userChoices whenever currentStepIndex changes
   useEffect(() => {
-    setSelectedOption(null);
+    setSelectedOption(userChoices[currentStep.id] ?? null);
     setIsWrong(false);
-  }, [currentStepIndex]);
+  }, [currentStepIndex, currentStep.id]);
 
   const handleOptionClick = (index: number) => {
     setSelectedOption(index);
+    setUserChoices(prev => ({ ...prev, [currentStep.id]: index }));
+
     if (index === correctIdx) {
       setIsWrong(false);
       // Fire fireworks!
@@ -46,6 +52,10 @@ const StepSolver: React.FC<StepSolverProps> = ({ steps, problemText }) => {
 
   const nextStep = () => {
     setCurrentStepIndex(prev => Math.min(prev + 1, steps.length - 1));
+  };
+
+  const prevStep = () => {
+    setCurrentStepIndex(prev => Math.max(prev - 1, 0));
   };
 
   const handleExplainSimply = async () => {
@@ -77,7 +87,7 @@ const StepSolver: React.FC<StepSolverProps> = ({ steps, problemText }) => {
           <span className="bg-indigo-500 p-1.5 rounded text-sm">Step {currentStepIndex + 1}</span>
           跟阿奇学数学
         </h3>
-        <span className="text-slate-300 font-medium">
+        <span className="text-slate-300 font-medium font-sans">
            {currentStepIndex + 1} / {steps.length}
         </span>
       </div>
@@ -97,7 +107,7 @@ const StepSolver: React.FC<StepSolverProps> = ({ steps, problemText }) => {
           <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-6 relative">
             <div className="flex justify-between items-start gap-6">
               <div>
-                <h4 className="text-indigo-800 font-bold mb-2 uppercase text-xs tracking-wider">阿奇的引导</h4>
+                <h4 className="text-indigo-800 font-bold mb-2 uppercase text-xs tracking-wider">阿奇的提示</h4>
                 <p className="text-xl text-slate-800 font-medium leading-relaxed">
                   {currentStep.instruction}
                 </p>
@@ -133,7 +143,7 @@ const StepSolver: React.FC<StepSolverProps> = ({ steps, problemText }) => {
                     </svg>
                   </div>
                   <div>
-                    <span className="block text-yellow-800 font-bold text-sm mb-1">通俗解释</span>
+                    <span className="block text-yellow-800 font-bold text-sm mb-1">通俗提示</span>
                     <p className="text-slate-700 text-lg leading-relaxed">
                       {simpleExplanations[currentStep.id]}
                     </p>
@@ -208,7 +218,7 @@ const StepSolver: React.FC<StepSolverProps> = ({ steps, problemText }) => {
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
-                逻辑推导
+                阶段总结
               </h4>
               <p className="text-xl text-indigo-900 font-bold">
                 {currentStep.aiConclusion}
@@ -217,32 +227,47 @@ const StepSolver: React.FC<StepSolverProps> = ({ steps, problemText }) => {
           )}
 
           {/* Proceed Section */}
-          {canProceed && (
-            <div className="mt-8 pt-8 border-t border-slate-200 animate-in fade-in slide-in-from-bottom-2">
-              <div className="bg-slate-50 rounded-lg p-6 mb-8 border border-slate-200">
-                <span className="text-indigo-600 font-bold block mb-2 text-sm uppercase tracking-wider">本步总结</span>
+          <div className="mt-8 pt-8 border-t border-slate-200 space-y-6">
+            {canProceed && (
+              <div className="bg-slate-50 rounded-lg p-6 animate-in fade-in slide-in-from-bottom-2 border border-slate-200">
+                <span className="text-indigo-600 font-bold block mb-2 text-sm uppercase tracking-wider">阿奇的解析</span>
                 <p className="text-xl text-slate-800 font-medium">{currentStep.explanation}</p>
               </div>
-              
-              {!isLastStep ? (
+            )}
+            
+            <div className="flex gap-4">
+              {currentStepIndex > 0 && (
+                <button
+                  onClick={prevStep}
+                  className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold py-4 rounded-lg shadow-sm transition-all flex items-center justify-center gap-3 text-xl"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M10 19l-7-7 7-7M19 19l-7-7 7-7" />
+                  </svg>
+                  上一步
+                </button>
+              )}
+
+              {canProceed && !isLastStep && (
                 <button
                   onClick={nextStep}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-3 text-xl"
+                  className="flex-[2] bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-lg shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-3 text-xl"
                 >
                   下一步
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M14 5l7 7-7 7M5 5l7 7-7 7" />
                   </svg>
                 </button>
-              ) : (
-                <div className="bg-emerald-600 text-white p-8 rounded-lg text-center shadow-xl">
-                  <div className="text-5xl mb-4">🏆</div>
-                  <h4 className="text-3xl font-bold mb-2">挑战成功！</h4>
-                  <p className="text-xl opacity-90">这道题你已经完全掌握了！</p>
+              )}
+
+              {isLastStep && isCorrect && (
+                <div className="flex-1 bg-emerald-600 text-white p-6 rounded-lg text-center shadow-xl animate-in zoom-in-95">
+                  <div className="text-3xl mb-2">🏆</div>
+                  <h4 className="text-xl font-bold">挑战成功！</h4>
                 </div>
               )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
